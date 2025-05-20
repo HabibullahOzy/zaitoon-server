@@ -4,6 +4,8 @@ require('dotenv').config();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const mongoose = require("mongoose");
 const multer = require('multer')
+const cloudinary = require("./config/cloudinary")
+// const { CloudinaryStorage } = require("multer-storage-cloudinary");
 
 // const upload = multer({ dest: '/files' })
 // const stripe = require('stripe')(process.env.PAYMENT_SK)
@@ -16,10 +18,26 @@ const multer = require('multer')
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors());
-app.use(express.json());
-app.use('/uploads', express.static('uploads'));
+// app.use(cors());
+
+app.use(cors({
+  origin: ['http://localhost:3000', 'https://zaitoonpublication.com'],  // allow your frontend domain
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));
+
+
+// app.use(express.json());
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+// app.use('/uploads', express.static('uploads'));
+
+const upload = require("./upload");
+const router = express.Router();
 // app.use("/api/upload", uploadRoutes)
+
+app.use(router);
 
 
 
@@ -87,28 +105,34 @@ const reviewCollect = itemCollections.collection('review')
 
 
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/"); // Make sure 'uploads' folder exists
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + "-" + file.originalname);
-  }
-});
+// const storage = multer.diskStorage({
+//   destination: function (req, file, cb) {
+//     cb(null, "uploads/"); // Make sure 'uploads' folder exists
+//   },
+//   filename: function (req, file, cb) {
+//     cb(null, Date.now() + "-" + file.originalname);
+//   }
+// });
 
-const upload = multer({ storage: storage });
+// const upload = multer({ storage: storage });
 
-app.post('/profile', upload.fields([
+
+router.post('/profile', upload.fields([
   { name: "image", maxCount: 1 },
   { name: "pdf", maxCount: 1 }
 ]), async function (req, res) {
   try {
     // const db = await connectDB();
     // const collection = itemCollections.collection("addedProduct");
+    // console.log("PDF File:", req.files?.pdf?.[0]);
+    // console.log("Image File:", req.files?.image?.[0]);
 
+    const pdfFile = req.files?.pdf?.[0]?.path || "";
+    const imageFile = req.files?.image?.[0]?.path || "";
 
-    const pdfFile = req.files?.pdf?.[0]?.filename || "";
-    const imageFile = req.files?.image?.[0]?.filename || ""
+    if (!pdfFile || !imageFile) {
+      return res.status(400).json({ status: 'error', message: 'Missing file uploads' });
+    }
 
     const newProduct = {
       namebn: req.body.namebn,
@@ -123,7 +147,7 @@ app.post('/profile', upload.fields([
       quantity: req.body.quantity,
       edition: req.body.edition,
       description: req.body.description,
-      ProductCode: req.body.ProductCode,
+      ProductCode: req.body.productCode,
       category: req.body.category,
       pdf: pdfFile,
       image: imageFile,
@@ -275,33 +299,33 @@ app.get('/allProducts', async (req, res) => {
 app.put('/productUpdate/:id', async (req, res) => {
 
   const id = req.params.id;
-   
-  const{
-     namebn,
-      namearb,
-      nameeng,
-      authorName,
-      edition,
-      numberOfpage,
-      offerprice,
-      productPrice,
-      description,
-      quantity
-   }= req.body;
+
+  const {
+    namebn,
+    namearb,
+    nameeng,
+    authorName,
+    edition,
+    numberOfpage,
+    offerprice,
+    productPrice,
+    description,
+    quantity
+  } = req.body;
   const filter = { _id: new ObjectId(id) }
   const options = { upsert: true };
   const updatedDoc = {
     $set: {
-       namebn: namebn,
-      namearb:namearb,
-      nameeng:nameeng,
-      authorName:authorName,
-      edition:edition,
-      numberOfpage:numberOfpage,
-      offerprice:offerprice,
-      productPrice:productPrice,
-      description:description,
-      quantity:quantity
+      namebn: namebn,
+      namearb: namearb,
+      nameeng: nameeng,
+      authorName: authorName,
+      edition: edition,
+      numberOfpage: numberOfpage,
+      offerprice: offerprice,
+      productPrice: productPrice,
+      description: description,
+      quantity: quantity
     }
   }
   const result = await collections.updateOne(filter, updatedDoc, options);
